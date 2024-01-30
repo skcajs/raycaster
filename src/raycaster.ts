@@ -1,7 +1,9 @@
 export function raycaster(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
 
-    let imageData = ctx?.createImageData(canvas.width, canvas.height)
+    let imageData = ctx?.createImageData(canvas.width, canvas.height);
+
+    const internalCanvasWidth = canvas.width;
 
     const halfCanvasHeight = canvas.height / 2;
     const imageDataWidth4 = canvas.width*4;
@@ -81,8 +83,10 @@ export function raycaster(canvas: HTMLCanvasElement) {
 
     function step() {
         handleKeydown()
-        for (let i = 0; i < canvas.width; ++i) {
-            let rayAngle = (playerAngle - FOV / 2) + (i / canvas.width) * FOV;
+        const data: number[] = []
+
+        for (let i = 0; i < internalCanvasWidth; ++i) {
+            let rayAngle = (playerAngle - FOV / 2) + (i / internalCanvasWidth) * FOV;
             let distanceToWall = 0;
             let hitWall = false;
             let eyeX = Math.sin(rayAngle);
@@ -106,21 +110,28 @@ export function raycaster(canvas: HTMLCanvasElement) {
     
             const ceiling = Math.floor((halfCanvasHeight) - (canvas.height / distanceToWall));
             const floor = canvas.height - ceiling;
-
-            const wallShade = Math.max(FOG, 150 - Math.floor((distanceToWall/16) * 150));
     
             for (let j = 0; j < canvas.height; ++j) {
                 if (j < ceiling) {
-                    pushImageData(i, j, FOG, FOG, FOG);
+                    data.push(FOG);
                 }
                 else if (j > ceiling && j <= floor) {
-                    pushImageData(i, j, wallShade, wallShade, wallShade);
+                    const wallShade = Math.max(FOG, 150 - Math.floor((distanceToWall/16) * 150));
+                    data.push(wallShade);
                 }
                 else {
                     const floorShade = Math.max(50, Math.sin((j - halfCanvasHeight) / halfCanvasHeight * Math.PI / 2) * 255);
-                    pushImageData(i, j, floorShade, floorShade, floorShade);
+                    data.push(floorShade);
                 }
             }
+        }
+
+        const downsampled_data = downsample(data, 1);
+
+        for (let k = 0; k < downsampled_data.length; k++) {
+            let i = k % canvas.width;
+            let j = Math.floor(k / canvas.width);
+            pushImageData(i, j, downsampled_data[k], downsampled_data[k], downsampled_data[k])
         }
     
         if (imageData && ctx) {
@@ -128,6 +139,19 @@ export function raycaster(canvas: HTMLCanvasElement) {
         }
 
         window.requestAnimationFrame(step)
+    }
+
+    function downsample(data: number[], size: number) : number[] {
+        const downsampled_data = []
+        for (let i = 0; i < data.length; i+=size) {
+            let avg = 0;
+            for (let j = 0; j < size; j++) {
+                avg += data[j]
+            }
+            downsampled_data.push(avg/size)
+        }
+
+        return downsampled_data
     }
 
     function pushImageData(i: number, j: number, r: number, g: number, b: number, a: number = 255) {
